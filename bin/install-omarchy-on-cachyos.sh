@@ -46,8 +46,12 @@ sudo pacman-key --recv-keys F0134EE680CAC571
 # Locally sign and trust the key
 sudo pacman-key --lsign-key F0134EE680CAC571
 
-# Add omarchy repository to pacman.conf
-echo -e "\n[omarchy]\nSigLevel = Optional TrustedOnly\nServer = https://pkgs.omarchy.org/\$arch" | sudo tee -a /etc/pacman.conf > /dev/null
+# Add omarchy repository to pacman.conf (skip if already present)
+if ! grep -q '^\[omarchy\]' /etc/pacman.conf; then
+    echo -e "\n[omarchy]\nSigLevel = Optional TrustedOnly\nServer = https://pkgs.omarchy.org/\$arch" | sudo tee -a /etc/pacman.conf > /dev/null
+else
+    echo "Omarchy repository already present in pacman.conf, skipping."
+fi
 sudo pacman -Syu
 
 # Remove CachyOS SDDM config
@@ -89,6 +93,9 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/prefligh
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
 cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
+
+# Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
+sed -i 's/ln -s/ln -sf/' install/config/omarchy-ai-skill.sh
 
 # Remove plymouth.sh source line from install.sh
 sed -i '/run_logged \$OMARCHY_INSTALL\/login\/plymouth\.sh/d' install/login/all.sh
