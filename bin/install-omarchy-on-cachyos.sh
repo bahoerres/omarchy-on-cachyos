@@ -109,6 +109,37 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/login\/alt-bootloaders\.sh/d' install/log
 # Remove pacman.sh from post-install/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/post-install\/pacman\.sh/d' install/post-install/all.sh
 
+# Disable wpa_supplicant and configure NetworkManager to use iwd backend.
+# CachyOS enables wpa_supplicant by default, which conflicts with omarchy's iwd,
+# causing WiFi to appear connected but have no IP or connectivity.
+cat >> install/config/hardware/network.sh << 'NETEOF'
+
+# Disable wpa_supplicant to prevent conflict with iwd
+sudo systemctl disable --now wpa_supplicant.service 2>/dev/null
+
+# Configure NetworkManager to use iwd as its WiFi backend
+if ! grep -q "wifi.backend=iwd" /etc/NetworkManager/NetworkManager.conf 2>/dev/null; then
+  sudo tee -a /etc/NetworkManager/NetworkManager.conf > /dev/null << EOF
+
+[device]
+wifi.backend=iwd
+EOF
+fi
+NETEOF
+
+# Pin walker to the omarchy repo so CachyOS doesn't override it with an
+# incompatible version that breaks compatibility with elephant.
+sed -i '1a\
+# Pin walker to omarchy repo to prevent CachyOS version conflict\
+if ! grep -q "^IgnorePkg.*walker" /etc/pacman.conf 2>/dev/null; then\
+  if grep -q "^IgnorePkg" /etc/pacman.conf; then\
+    sudo sed -i '"'"'s/^IgnorePkg = \\(.*\\)/IgnorePkg = \\1 walker/'"'"' /etc/pacman.conf\
+  else\
+    sudo sed -i '"'"'/^\\[options\\]/a IgnorePkg = walker'"'"' /etc/pacman.conf\
+  fi\
+fi\
+' install/config/walker-elephant.sh
+
 # Update mise activation to support both bash and fish
 sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
@@ -128,6 +159,8 @@ echo " 5. Removed plymouth.sh from install.sh to avoid conflict with CachyOS log
 echo " 6. Removed limine-snapper.sh from install.sh to avoid conflict with CachyOS boot loader installation."
 echo " 7. Removed alt-bootloaders.sh from install.sh to avoid conflict with CachyOS boot loader installation."
 echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
+echo " 9. Disabled wpa_supplicant and configured NetworkManager to use iwd backend."
+echo "10. Pinned walker to omarchy repo to prevent CachyOS version conflict."
 echo ""
 echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
 echo "If this is the case, you will need to run the following command after this installation script is complete:"
